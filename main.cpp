@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <poll.h>
+#include <sys/time.h>
 
 #include <string>
 
@@ -48,17 +50,44 @@ Cmd *createCmd(){
 }
 
 void *threadFn(void *arg){
+    int fd;
+    struct pollfd fds;
     char buf[BUFSIZE];
     char fifo[BUFSIZE];
     struct stat st;
     void **arr = (void**)arg;
     char *target = (char*)arr[0];
+    int polr = 0;
     bzero(fifo, BUFSIZE);
     strcpy(fifo, target);
     Cmd *cmd = (Cmd*)arr[1];
-    FILE *fp = fopen(fifo, "r");
+
+    fd = open(fifo, O_RDONLY);
+    if (!fd) {
+	fprintf(stderr, "Can not open %s\n", fifo);
+	return NULL;
+    }
+    fds.fd = fd;
+    fds.events = POLLIN;
+    polr = poll(&fds, 1, 1000);
+    if (polr < 0) {
+	fprintf(stderr, "Poll error for %s\n", fifo);
+	return NULL;
+    }
+    if (!polr) {
+	fprintf(stderr, "Can not read from %s by timeout\n", fifo);
+	if (!stat(fifo, &st)) unlink(fifo);
+	return NULL;
+    }
+
+    FILE *fp = fdopen(fd, "r");
+    if (!fp) {
+	fprintf(stderr, "Can not read %s\n", fifo);
+	return NULL;
+    }
     fgets(buf, BUFSIZE, fp);
     fclose(fp);
+
     if (buf[BUFSIZE - 1]) {
 	fprintf(stderr, "Recieved string is too long, exit\n");
 	return NULL;
