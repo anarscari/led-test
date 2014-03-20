@@ -1,0 +1,21 @@
+#!/bin/sh
+
+GLOBAL_FIFO=/tmp/LED_FIFO
+
+if [ -p $GLOBAL_FIFO ];
+then
+    if ! ps -C led-server | grep led-server > /dev/null
+    then
+	echo "Fifo is presend, but server not running"
+	exit
+    fi
+
+    fifo="/tmp/LED_FIFO$$"
+    mknod "$fifo" p
+    echo "$fifo" > "$GLOBAL_FIFO"
+    echo "$1 $2" > $fifo
+    cat $fifo
+    rm -f $fifo
+else
+    echo "Can not connect to server"
+fi
